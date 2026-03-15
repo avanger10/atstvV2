@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATESUR TV - Google TV Edition</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1a73e8;
+            --bg-dark: #050505;
+            --glass: rgba(255, 255, 255, 0.08);
+            --glass-focus: rgba(255, 255, 255, 0.25); /* Más visible para TV */
+            --text-main: #f1f3f4;
+            --accent-glow: rgba(26, 115, 232, 0.4);
+            --yt-gold: #FFD700;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Google Sans', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Evita scroll innecesario en TV */
+        }
+
+        .ambilight {
+            position: fixed;
+            top: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 30%, var(--accent-glow) -50%, transparent 70%);
+            z-index: -1;
+            transition: all 0.8s ease;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            padding: 20px 0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 500; }
+        .logo-dot { width: 12px; height: 12px; background: var(--primary-color); border-radius: 50%; box-shadow: 0 0 15px var(--primary-color); }
+
+        /* REPRODUCTOR OPTIMIZADO */
+        .video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.1);
+            outline: none;
+        }
+        
+        /* Resalte cuando el contenedor tiene el foco en TV */
+        .video-container:focus { border-color: var(--primary-color); }
+
+        video { width: 100%; height: 100%; object-fit: contain; }
+
+        .fs-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .fs-btn {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 12px 18px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        /* ESTADO FOCUS PARA CONTROL REMOTO */
+        .fs-btn:focus {
+            background: var(--yt-gold);
+            color: #000;
+            transform: scale(1.1);
+            border-color: white;
+        }
+
+        .badge-live {
+            position: absolute;
+            top: 20px; left: 20px;
+            background: #d93025;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        /* CAROUSEL */
+        .rail {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            padding: 15px 5px;
+            scrollbar-width: none;
+        }
+        .rail::-webkit-scrollbar { display: none; }
+
+        .card {
+            min-width: 260px;
+            background: var(--glass);
+            border-radius: 20px;
+            padding: 20px;
+            border: 2px solid transparent;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .card:focus {
+            background: var(--glass-focus);
+            transform: scale(1.05);
+            border-color: var(--primary-color);
+        }
+
+        .footer {
+            margin-top: auto;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .yt-profile-btn {
+            background: var(--yt-gold);
+            color: #000;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            outline: none;
+        }
+
+        .yt-profile-btn:focus {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px var(--yt-gold);
+        }
+
+        .yt-profile-btn img { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #000; }
+    </style>
+</head>
+<body>
+
+<div class="ambilight" id="bg-glow"></div>
+
+<div class="container">
+    <div class="header">
+        <div class="brand"><div class="logo-dot"></div> ATESUR TV</div>
+        <div id="status" style="font-size: 12px; opacity: 0.7;">Conectado</div>
+    </div>
+
+    <div class="video-container" id="v-container" tabindex="0">
+        <div class="badge-live">EN VIVO</div>
+        <video id="player" autoplay playsinline></video>
+        
+        <div class="fs-controls">
+            <button class="fs-btn" onclick="toggleFullScreen()" id="fs-enter" tabindex="0">PANTALLA COMPLETA</button>
+            <button class="fs-btn" onclick="exitFullScreen()" id="fs-exit" style="display:none;" tabindex="0">SALIR</button>
+        </div>
+    </div>
+
+    <div class="rail">
+        <div class="card" tabindex="0" onclick="changeChannel('https://video2.getstreamhosting.com:19360/8016/8016.m3u8', '#1a73e8')">
+            <h3>ATESUR RNN</h3>
+            <p>Noticias</p>
+        </div>
+        <div class="card" tabindex="0" onclick="changeChannel('https://video2.getstreamhosting.com:19360/chfabkvpur/chfabkvpur.m3u8', '#a142f4')">
+            <h3>ATESUR Canal</h3>
+            <p>Entretenimiento</p>
+        </div>
+    </div>
+</div>
+
+<footer class="footer">
+    <a href="https://youtube.com/@avanedwardyucraporcel?si=vOpD_qqJSyhoOkFN" target="_blank" class="yt-profile-btn" tabindex="0">
+        <img src="1001200042.png" alt="Perfil">
+        <span>SUSCRÍBETE</span>
+    </a>
+    <div style="font-size: 10px; opacity: 0.4;">
+        ATESUR PRO 2026 | BY AVAN EDWARD
+    </div>
+</footer>
+
+<script>
+    const video = document.getElementById('player');
+    const container = document.getElementById('v-container');
+    const btnEnter = document.getElementById('fs-enter');
+    const btnExit = document.getElementById('fs-exit');
+    let hls;
+
+    function toggleFullScreen() {
+        if (!document.fullscreenElement) {
+            container.requestFullscreen().catch(err => console.log(err));
+        }
+    }
+
+    function exitFullScreen() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement) {
+            btnEnter.style.display = 'none';
+            btnExit.style.display = 'block';
+            btnExit.focus(); // Mover el foco al botón de salir automáticamente
+        } else {
+            btnEnter.style.display = 'block';
+            btnExit.style.display = 'none';
+            container.focus();
+        }
+    });
+
+    function changeChannel(url, color) {
+        document.documentElement.style.setProperty('--primary-color', color);
+        if (hls) hls.destroy();
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+        }
+    }
+
+    // LÓGICA DE CONTROL REMOTO (D-PAD)
+    document.addEventListener('keydown', (e) => {
+        const focusable = Array.from(document.querySelectorAll('[tabindex="0"]'));
+        let index = focusable.indexOf(document.activeElement);
+
+        if (e.key === "ArrowRight" && index < focusable.length - 1) focusable[index + 1].focus();
+        if (e.key === "ArrowLeft" && index > 0) focusable[index - 1].focus();
+        if (e.key === "ArrowDown") {
+            // Lógica para saltar del video a los canales o al botón de YouTube
+            if (index === 0 || index === 1 || index === 2) focusable[3].focus();
+        }
+        if (e.key === "ArrowUp") {
+            if (index > 2) focusable[0].focus();
+        }
+        if (e.key === "Enter") {
+            document.activeElement.click();
+        }
+    });
+
+    changeChannel('https://video2.getstreamhosting.com:19360/8016/8016.m3u8', '#1a73e8');
+</script>
+</body>
+</html>
